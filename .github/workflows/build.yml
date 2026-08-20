@@ -27,21 +27,51 @@ jobs:
       - name: Accept Android SDK Licenses
         run: yes | sdkmanager --licenses || true
 
-      - name: Build Android APK
+      - name: Generate Dummy Files and Build APK
         run: |
-          SETTINGS_DIR=$(find . -name "settings.gradle" -o -name "settings.gradle.kts" | head -n 1 | xargs -I {} dirname {})
-          
-          if [ -n "$SETTINGS_DIR" ]; then
-            echo "Building from project root: $SETTINGS_DIR"
-            cd "$SETTINGS_DIR"
-          fi
+          # 1. Create standard Android debug keystores in both project root and user home
+          keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+          mkdir -p ~/.android
+          cp debug.keystore ~/.android/debug.keystore
 
-          if [ -f "./gradlew" ]; then
-            chmod +x gradlew
-            ./gradlew assembleDebug --stacktrace
-          else
-            gradle assembleDebug --stacktrace
-          fi
+          # 2. Create placeholder google-services.json if needed by the Google plugin
+          mkdir -p app
+          cat << 'EOF' > app/google-services.json
+          {
+            "project_info": {
+              "project_number": "123456789012",
+              "project_id": "dummy-clock-project",
+              "storage_bucket": "dummy-clock-project.appspot.com"
+            },
+            "client": [
+              {
+                "client_info": {
+                  "mobilesdk_app_id": "1:123456789012:android:0123456789abcdef",
+                  "android_client_info": {
+                    "package_name": "com.example.clock"
+                  }
+                },
+                "oauth_client": [],
+                "api_key": [
+                  {
+                    "current_key": "AIzaSyDummyKeyForBuildOnly12345"
+                  }
+                ],
+                "services": {
+                  "appinvite_service": {
+                    "other_platform_oauth_client": []
+                  }
+                }
+              }
+            ],
+            "configuration_version": "1"
+          }
+          EOF
+
+          # 3. Update wrapper and build
+          gradle wrapper --gradle-version 9.3.1 --distribution-type bin
+          chmod +x gradlew
+          ./gradlew assembleDebug --stacktrace
 
       - name: Upload Debug APK
         uses: actions/upload-artifact@v4
