@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Source Code
+      - name: Checkout Code
         uses: actions/checkout@v4
 
       - name: Set up Java JDK 17
@@ -19,15 +19,38 @@ jobs:
           distribution: 'zulu'
           java-version: '17'
 
-      - name: Grant Execute Permission to Gradle
-        run: chmod +x gradlew
+      - name: Accept Android Licenses
+        run: yes | sdkmanager --licenses || true
 
-      - name: Build Debug APK
-        run: ./gradlew assembleDebug --stacktrace
+      - name: Locate Project & Build APK
+        run: |
+          # Find the folder containing build.gradle or settings.gradle
+          BUILD_DIR=$(find . -name "build.gradle" -o -name "build.gradle.kts" -o -name "settings.gradle" | head -n 1 | xargs -I {} dirname {})
+          
+          if [ -z "$BUILD_DIR" ]; then
+            echo "Error: Could not find build.gradle in the repository!"
+            exit 1
+          fi
+          
+          echo "Building inside directory: $BUILD_DIR"
+          cd "$BUILD_DIR"
+
+          # If gradlew exists, grant permission and run it
+          if [ -f "./gradlew" ]; then
+            chmod +x gradlew
+            ./gradlew assembleDebug --stacktrace
+          else
+            # If gradlew is missing, install gradle and build
+            echo "gradlew not found. Generating wrapper..."
+            gradle wrapper
+            chmod +x gradlew
+            ./gradlew assembleDebug --stacktrace
+          fi
 
       - name: Upload Debug APK
         uses: actions/upload-artifact@v4
         with:
           name: clock-debug-apk
-          path: app/build/outputs/apk/debug/*.apk
+          path: "**/app/build/outputs/apk/debug/*.apk"
           if-no-files-found: error
+          
