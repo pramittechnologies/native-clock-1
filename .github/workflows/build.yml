@@ -19,32 +19,31 @@ jobs:
           distribution: 'zulu'
           java-version: '17'
 
-      - name: Accept Android Licenses
+      - name: Set up Gradle 8.7
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+
+      - name: Accept Android SDK Licenses
         run: yes | sdkmanager --licenses || true
 
-      - name: Locate Project & Build APK
+      - name: Build Android APK
         run: |
-          # Find the folder containing build.gradle or settings.gradle
-          BUILD_DIR=$(find . -name "build.gradle" -o -name "build.gradle.kts" -o -name "settings.gradle" | head -n 1 | xargs -I {} dirname {})
+          # Find directory containing settings.gradle / settings.gradle.kts
+          SETTINGS_DIR=$(find . -name "settings.gradle" -o -name "settings.gradle.kts" | head -n 1 | xargs -I {} dirname {})
           
-          if [ -z "$BUILD_DIR" ]; then
-            echo "Error: Could not find build.gradle in the repository!"
-            exit 1
+          if [ -n "$SETTINGS_DIR" ]; then
+            echo "Building from root project directory: $SETTINGS_DIR"
+            cd "$SETTINGS_DIR"
+          else
+            echo "Building from repository root..."
           fi
-          
-          echo "Building inside directory: $BUILD_DIR"
-          cd "$BUILD_DIR"
 
-          # If gradlew exists, grant permission and run it
           if [ -f "./gradlew" ]; then
             chmod +x gradlew
             ./gradlew assembleDebug --stacktrace
           else
-            # If gradlew is missing, install gradle and build
-            echo "gradlew not found. Generating wrapper..."
-            gradle wrapper
-            chmod +x gradlew
-            ./gradlew assembleDebug --stacktrace
+            gradle assembleDebug --stacktrace
           fi
 
       - name: Upload Debug APK
@@ -53,4 +52,3 @@ jobs:
           name: clock-debug-apk
           path: "**/app/build/outputs/apk/debug/*.apk"
           if-no-files-found: error
-          
